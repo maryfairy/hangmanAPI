@@ -13,12 +13,16 @@ from google.appengine.api import taskqueue
 
 from models import User, Game, Score
 from models import StringMessage, NewGameForm, GameForm, MakeMoveForm,\
-    ScoreForms
+    ScoreForms, GameListForm, GameListForms, UserRankForm, UserRankForms, \
+    GameHistoryForm
+
 from utils import get_by_urlsafe
 
 NEW_GAME_REQUEST = endpoints.ResourceContainer(NewGameForm)
 GET_GAME_REQUEST = endpoints.ResourceContainer(
         urlsafe_game_key=messages.StringField(1),)
+GET_HIGH_SCORE_REQUEST = endpoints.ResourceContainer(
+     limit=messages.IntegerField(1))
 MAKE_MOVE_REQUEST = endpoints.ResourceContainer(
     MakeMoveForm,
     urlsafe_game_key=messages.StringField(1),)
@@ -71,7 +75,25 @@ class HangmanApi(remote.Service):
         taskqueue.add(url='/tasks/cache_average_attempts')
         return game.to_form('Good luck playing Hangman!')
 
-## urlsafe_key = ahlkZXZ-dWRhY2l0eS1kZXNpZ24tYS1nYW1lchELEgRHYW1lGICAgICAgJAIDA
+## Add in cancel game request
+    @endpoints.method(request_message=GET_GAME_REQUEST,
+                      response_message=StringMessage,
+                      path='game/cancel/{urlsafe_game_key}',
+                      name='cancel_game',
+                      http_method='GET')
+    
+    def cancel_game(self, request):
+        """Cancel playing game."""
+        game = get_by_urlsafe(request.urlsafe_game_key, Game)
+        if game:
+            if(game.game_over == False):
+                game.key.delete()
+                return StringMessage(message="Game cancelled.")
+            else:
+                return StringMessage(message="Cannot delete already completed game.")
+        else:
+            raise endpoints.NotFoundException('Incorrect Game Key')
+
     @endpoints.method(request_message=GET_GAME_REQUEST,
                       response_message=GameForm,
                       path='game/{urlsafe_game_key}',
@@ -97,32 +119,33 @@ class HangmanApi(remote.Service):
         if game.game_over:
             return game.to_form('Game already over!')
 
-        # attempts will only be decreased if no letter found in target_word
-        if request.guess_letter[0] not in game.target_word:
-          game.attempts_remaining -= 1
-        
-        ##if request.guess == game.target:
-        ##    game.end_game(True)
-        ##    return game.to_form('You win!')
+        ## set-up history of message string
+        if game.history is None:
+          history = []
 
-        # instead, check if guess_word matches the target word
-        # this passes
-        # TODO: make case agnostic
         if request.guess_word == game.target_word:
             game.end_game(True)
+            history.append([request.guess_word, 'Target Word Guessed'])
+            game.history = str(history)
+            game.put()
             return game.to_form('You win!')
 
-        # TODO: only allow 1 guess of same letter
         # need to breakdown target_word into individual strings
-        # do this by splitting a string into an array
+        # did this by splitting a string into an array
         # http://stackoverflow.com/questions/113655/is-there-a-function-in-python-to-split-a-word-into-a-list
-
-        # need to pull previous breakdown as well
 
         # create string of previously guessed letters
         string_guessed_letter = request.guess_letter.encode('UTF8')
-        print('string_guessed_letter')
-        print(string_guessed_letter)
+
+        # check illegal move if letter was guessed already
+        if game.guessed_letters is not None:
+          if string_guessed_letter in game.guessed_letters:
+            return game.to_form('Letter already guessed!')
+
+
+        # attempts will only be decreased if no letter found in target_word
+        if request.guess_letter[0] not in game.target_word:
+          game.attempts_remaining -= 1
 
         # add new guest letter to string
         if game.guessed_letters is None:
@@ -130,14 +153,8 @@ class HangmanApi(remote.Service):
         else:
           game.guessed_letters= str(game.guessed_letters) + string_guessed_letter
         game.put()
-        
-        print('game.guessed_letters')
-        print(game.guessed_letters)
-        
+               
         # need to print out the hangman board
-        # cycle through list of guessed letters and show or '_'
-        # convert strings to list of letters
-
         strip_unicode_letter_history = [str(x) for x in game.guessed_letters]
 
         print_hint = [str(x) for x in game.target_word]
@@ -154,17 +171,39 @@ class HangmanApi(remote.Service):
               show_hint.append(strip_unicode_letter_history[x])
               break
 
-        print(show_hint)
         msg = ' '.join(show_hint)
 
-        #print(msg)
+        game.history = str(game.history) + ' ' + str([string_guessed_letter,msg])
+        game.put()
 
+        #print(msg)
+        # TODO add more to the message during the game (# moves left
+        # letters guessed, etc)
         if game.attempts_remaining < 1:
             game.end_game(False)
-            return game.to_form(msg + ' Game over!')
+            game.history = str(game.history) + ' ' + str([msg + '  Game over!'])
+            game.put()
+            return game.to_form(msg + '  Game over!')
         else:
             game.put()
             return game.to_form(msg)
+
+    ## Add in get_user_games
+    @endpoints.method(request_message=USER_REQUEST,
+                      response_message=GameListForms,
+                      path='games/user/{user_name}',
+                      name='get_user_games',
+                      http_method='GET')
+    def get_user_games(self, request):
+        """Returns all of an individual User's games."""
+        user = User.query(User.name == request.user_name).get()
+        if not user:
+            raise endpoints.NotFoundException(
+                    'A User with that name does not exist!')
+        games = Game.query(Game.user == user.key)
+        games = games.filter(Game.game_over == False)
+        return GameListForms(items=[game.to_gamelistform() for game in games])
+
 
     @endpoints.method(response_message=ScoreForms,
                       path='scores',
@@ -179,6 +218,7 @@ class HangmanApi(remote.Service):
                       path='scores/user/{user_name}',
                       name='get_user_scores',
                       http_method='GET')
+
     def get_user_scores(self, request):
         """Returns all of an individual User's scores"""
         user = User.query(User.name == request.user_name).get()
@@ -187,6 +227,64 @@ class HangmanApi(remote.Service):
                     'A User with that name does not exist!')
         scores = Score.query(Score.user == user.key)
         return ScoreForms(items=[score.to_form() for score in scores])
+
+    ## Add in get_high_scores
+    @endpoints.method(request_message=GET_HIGH_SCORE_REQUEST,
+                      response_message=ScoreForms,
+                      path='high_scores',
+                      name='get_high_scores',
+                      http_method='GET')
+    def get_high_scores(self, request):
+        """Return high scores"""
+        scores = Score.query(Score.won == True).order(Score.guesses)
+        scores = scores.fetch(limit=request.limit);
+        return ScoreForms(items=[score.to_form() for score in scores])
+
+    ## Add in get_user_rankings
+    @endpoints.method(response_message=UserRankForms,
+                      path='user_rankings',
+                      name='get_user_rankings',
+                      http_method='GET')
+    def get_user_rankings(self, request):
+        """Return User Rankings"""
+        ## For each user, calculate their win/loss ratio
+        ## use the average number of guesses per game as tiebreaker
+        users = User.query()
+        user_stats = []
+        #old_user_stats = []
+        for u in users:
+          ## sum # wins and # games completed
+          ## Need table like : user, rank, wins, totalgames, # guesses
+          scores = Score.query(Score.user == u.key).fetch()
+          ## how do we say cycle through scores table
+          if scores:
+            tot_games = len(scores) # i think this is right, test
+            tot_wins = sum([1 if score.won == True else 0 for score in scores])
+            tot_guesses = sum([score.guesses for score in scores])
+          #user_stats.append([u.name, tot_games, tot_wins, tot_guesses])
+          #old_user_stats.append([u.name, tot_games, tot_wins, tot_guesses])
+          user_stats.append([u.name, 100*(tot_wins/float(tot_games)), round((tot_guesses/float(tot_games)),3)]) 
+          # re-order by desc win/loss ratio
+          user_stats = sorted(user_stats, key=lambda x: x[1], reverse=True)
+        return UserRankForms(items=[UserRankForm(user=a[0],
+            ratio=a[1]) for a in user_stats])
+
+    ## Add in get_game_history
+    @endpoints.method(request_message=GET_GAME_REQUEST,
+                      response_message=GameHistoryForm,
+                      path='game_history',
+                      name='get_game_history',
+                      http_method='GET')
+    def get_game_history(self, request):
+        """Return Game History"""
+        game = get_by_urlsafe(request.urlsafe_game_key, Game)
+        #if game:
+        #    return game.to_form('Time to make a move!')
+        #else:
+        #    raise endpoints.NotFoundException('Game not found!')
+        #TODO clean up how history is returned (do item thing)
+        return GameHistoryForm(history=game.history)
+        #return StringMessage(message='XX')
 
     @endpoints.method(response_message=StringMessage,
                       path='games/average_attempts',
