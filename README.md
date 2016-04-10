@@ -5,7 +5,7 @@ Instructions for playing the game
 ## Set-Up Instructions:
 1.  Update the value of application in app.yaml to the app ID you have registered
  in the App Engine admin console and would like to use to host your instance of this sample.
-1.  Run the app with the devserver using dev_appserver.py DIR, and ensure it's
+1.  Run the app with the devserver using dev_appserver.py hangmanAPI/DIR, and ensure it's
  running by visiting the API Explorer - by default localhost:8080/_ah/api/explorer.
 1.  (Optional) Generate your client library(ies) with the endpoints tool.
  Deploy your application.
@@ -16,11 +16,11 @@ Instructions for playing the game
 Hangman is a game requiring the user to guess a letter (or word) for a randomly generated word. The user has 12 attempts to guess the letters. User must guess the word at the end, not the final letter.
 
 To Play:
-1. create_user and enter a username
-2. new_game endpoint using the username entered
-3. Response will reveal a urlsafe_key. Copy this key in order to make moves.
-4. enter the urlsafe key into the urlsafe_game_key field.
-5. Type a letter into the guess_letter or type word into guess_word field.
+- create_user and enter a username
+- new_game endpoint using the username entered
+- Response will reveal a urlsafe_key. Copy this key in order to make moves.
+- enter the urlsafe key into the urlsafe_game_key field.
+- Type a letter into the guess_letter or type word into guess_word field.
 
 ##Files Included:
  - api.py: Contains endpoints and game playing logic.
