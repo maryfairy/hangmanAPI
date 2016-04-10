@@ -125,10 +125,15 @@ class HangmanApi(remote.Service):
 
         if request.guess_word == game.target_word:
             game.end_game(True)
-            history.append([request.guess_word, 'Target Word Guessed'])
-            game.history = str(history)
+            game.history = str(game.history) + ' ' + str([request.guess_word, 'You Win!'])
             game.put()
             return game.to_form('You win!')
+
+        if request.guess_word is not None:
+            game.history = str(game.history) + ' ' + str([request.guess_word, 'Incorrect Guess!'])
+            game.attempts_remaining -= 1
+            game.put()
+            return game.to_form('Incorrect Guess!')
 
         # need to breakdown target_word into individual strings
         # did this by splitting a string into an array

@@ -1,0 +1,8 @@
+Design Decisions
+-hat additional properties did you add to your models and why?
+-Most additions were made to the Game model to make it fit with the Hangman game. Guessed_letters, history, target_word fields were added in order to track the user’s interactions for every make_move. 
+-What were some of the trade-offs or struggles you faced when implementing the new game logic?
+-Biggest struggle was manipulating the history captured from each moved made. For example, appending a new letter to the guessed_letters field was difficult, as well as cycling through the guessed_letters history to verify that a letter wasn’t guessed already. Cycling through the hangman board and adding new letters was challenging as well. Decided to perfect this instead of adding more features to the make_move response such as drawing a hangman each time.
+-Scoping out a new endpoint was also difficult. It was hard to not just dive right in and try to just edit something similar. Much smarter to think about each piece that needs to be created and building slowly (for example not just copy and pasting get_games to try and make a get_user_games endpoint)
+-Struggled with seeing what was breaking (the form, the response, the input, etc), but slowly got better diagnosing over time.
+-Another challenging part was the learning curve initially. Had to go through the lesson twice and still couldn’t understand all the parameters required to adjust the skeleton and make a unique game. Not sure if there was a way to test out the cron job functionality but seemed pretty cool.
