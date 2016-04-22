@@ -7,6 +7,7 @@ primarily with communication to/from the API's users."""
 
 import logging
 import endpoints
+import random
 from protorpc import remote, messages
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue
@@ -75,12 +76,13 @@ class HangmanApi(remote.Service):
         taskqueue.add(url='/tasks/cache_average_attempts')
         return game.to_form('Good luck playing Hangman!')
 
-## Add in cancel game request
+    ## Add in cancel game request
+    ## Adjusting cancel game request http_method to put
     @endpoints.method(request_message=GET_GAME_REQUEST,
                       response_message=StringMessage,
                       path='game/cancel/{urlsafe_game_key}',
                       name='cancel_game',
-                      http_method='GET')
+                      http_method='PUT')
     
     def cancel_game(self, request):
         """Cancel playing game."""
@@ -181,9 +183,6 @@ class HangmanApi(remote.Service):
         game.history = str(game.history) + ' ' + str([string_guessed_letter,msg])
         game.put()
 
-        #print(msg)
-        # TODO add more to the message during the game (# moves left
-        # letters guessed, etc)
         if game.attempts_remaining < 1:
             game.end_game(False)
             game.history = str(game.history) + ' ' + str([msg + '  Game over!'])
@@ -251,28 +250,13 @@ class HangmanApi(remote.Service):
                       name='get_user_rankings',
                       http_method='GET')
     def get_user_rankings(self, request):
-        """Return User Rankings"""
+        """Return User Rankings"""    
         ## For each user, calculate their win/loss ratio
         ## use the average number of guesses per game as tiebreaker
+        #users = User.query().order(User.performance).fetch()
         users = User.query()
-        user_stats = []
-        #old_user_stats = []
-        for u in users:
-          ## sum # wins and # games completed
-          ## Need table like : user, rank, wins, totalgames, # guesses
-          scores = Score.query(Score.user == u.key).fetch()
-          ## how do we say cycle through scores table
-          if scores:
-            tot_games = len(scores) # i think this is right, test
-            tot_wins = sum([1 if score.won == True else 0 for score in scores])
-            tot_guesses = sum([score.guesses for score in scores])
-          #user_stats.append([u.name, tot_games, tot_wins, tot_guesses])
-          #old_user_stats.append([u.name, tot_games, tot_wins, tot_guesses])
-          user_stats.append([u.name, 100*(tot_wins/float(tot_games)), round((tot_guesses/float(tot_games)),3)]) 
-          # re-order by desc win/loss ratio
-          user_stats = sorted(user_stats, key=lambda x: x[1], reverse=True)
-        return UserRankForms(items=[UserRankForm(user=a[0],
-            ratio=a[1]) for a in user_stats])
+        # create list out of user and performance output, appended guesses
+        return UserRankForms(items=[user.to_form() for user in users])
 
     ## Add in get_game_history
     @endpoints.method(request_message=GET_GAME_REQUEST,
@@ -283,13 +267,10 @@ class HangmanApi(remote.Service):
     def get_game_history(self, request):
         """Return Game History"""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
-        #if game:
-        #    return game.to_form('Time to make a move!')
-        #else:
-        #    raise endpoints.NotFoundException('Game not found!')
-        #TODO clean up how history is returned (do item thing)
         return GameHistoryForm(history=game.history)
-        #return StringMessage(message='XX')
+        for u in users:
+          scores = Score.query(Score.user == u.key).fetch
+          tot_guesses = sum([score.guesses for score in scores])
 
     @endpoints.method(response_message=StringMessage,
                       path='games/average_attempts',

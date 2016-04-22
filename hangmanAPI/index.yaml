@@ -19,3 +19,8 @@ indexes:
   properties:
   - name: won
   - name: guesses
+
+- kind: User
+  properties:
+  - name: performance
+  - name: guess_performance

@@ -11,17 +11,46 @@ from google.appengine.ext import ndb
 class User(ndb.Model):
     """User profile"""
     name = ndb.StringProperty(required=True)
-    email =ndb.StringProperty()
+    email = ndb.StringProperty()
+    performance = ndb.ComputedProperty(lambda self: self._get_user_ranking())
+    ## added in guess ratio to break tiebreak in ranking
+    guess_performance = ndb.ComputedProperty(lambda self: self._get_user_guesses())
 
+    def _get_user_ranking(self):
+        # calculate win/loss ratio per player
+        scores = Score.query(Score.user == self.key).fetch()
+        tot_games = 0
+        tot_wins = 0
+        if scores:
+            tot_games = len(scores)
+            tot_wins = sum([1 if score.won == True else 0 for score in scores])
+        if tot_games == 0:
+            ratio = 0
+        else:
+            ratio = 100*(tot_wins/float(tot_games))
+        return float(ratio)
+
+    def _get_user_guesses(self):
+        scores = Score.query(Score.user == self.key).fetch()
+        tot_guesses = 0
+        tot_games = 0
+        if scores:
+            tot_games = len(scores)
+            tot_guesses = sum([score.guesses for score in scores])
+        if tot_games == 0:
+            ratio = 0
+        else:
+            ratio = 100*(tot_guesses/float(tot_games))
+        return float(ratio)       
+
+    def to_form(self):
+        return UserRankForm(user=self.name, ratio=self.performance)
 
 class Game(ndb.Model):
     """Game object"""
-    ###target = ndb.IntegerProperty(required=True)
-    ## Make target a string property, not required each time
     target_word = ndb.StringProperty(required=True)
     guess_word = ndb.StringProperty()
     # add in a guess attempt, must be one-letter in length
-    ## TODO: create a check that the string entered length 1
     guess_letter = ndb.StringProperty()
     guessed_letters = ndb.StringProperty()
     attempts_allowed = ndb.IntegerProperty(required=True)
@@ -34,11 +63,10 @@ class Game(ndb.Model):
     @classmethod
     def new_game(cls, user, min, max, attempts):
         """Creates and returns a new game"""
-        if max < min:
-            raise ValueError('Maximum must be greater than minimum')
         game = Game(user=user,
                     # target_word chooses random word from txt file
-                    target_word = random.choice([line.strip() for line in open('wordlist.txt')]),
+                    target_word = random.choice([line.strip() for line in 
+                        open('wordlist.txt')]),
                     attempts_allowed=attempts,
                     attempts_remaining=attempts,
                     game_over=False)
